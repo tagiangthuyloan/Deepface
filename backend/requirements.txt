@@ -10,3 +10,4 @@ opencv-python-headless
 celery
 redis
 pydantic-settings
+boto3
