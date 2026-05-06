@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-multipart
+sqlalchemy
+psycopg2-binary
+qdrant-client
+deepface
+tf-keras
+opencv-python-headless
+celery
+redis
+pydantic-settings

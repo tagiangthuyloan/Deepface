@@ -1,0 +1,82 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123
+      POSTGRES_DB: attendance
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Lưu dữ liệu DB
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage # Cần dòng này để không mất dữ liệu Vector
+
+  redis:
+    image: redis:7-alpine
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - temp_faces:/tmp
+      - deepface_models:/root/.deepface/weights
+    depends_on:
+      - db
+      - redis
+      - qdrant
+      - minio
+    environment:
+      - QDRANT_HOST=qdrant
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password123
+      # Thêm chuỗi kết nối DB để backend biết đường tìm admin/123
+      - DATABASE_URL=postgresql://admin:123@db:5432/attendance
+
+  worker:
+    build: ./backend
+    command: celery -A app.worker.celery_app worker --loglevel=info    
+    volumes:
+      - ./backend:/app
+      - temp_faces:/tmp
+      - deepface_models:/root/.deepface/weights
+    depends_on:
+      - redis
+      - qdrant
+      - minio
+    environment:
+      - QDRANT_HOST=qdrant
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      # QUAN TRỌNG: Worker cũng cần MinIO để tải ảnh về xử lý
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password123
+      - DATABASE_URL=postgresql://admin:123@db:5432/attendance
+
+volumes:
+  postgres_data:    # Thêm cái này
+  qdrant_storage:
+  minio_data:       # Thêm cái này
+  temp_faces:
+  deepface_models:
