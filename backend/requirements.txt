@@ -11,3 +11,5 @@ celery
 redis
 pydantic-settings
 boto3
+pandas 
+xlsxwriter

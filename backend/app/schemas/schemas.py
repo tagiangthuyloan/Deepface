@@ -27,15 +27,15 @@ class DeptPermissionOut(DeptPermissionCreate):
 class EmployeeBase(BaseModel):
     full_name: str
     employee_code: str
-    department_id: int  # Bổ sung để bắt buộc chọn phòng ban khi đăng ký
     role: str = "user"
 
 class EmployeeCreate(EmployeeBase):
-    pass
+    department_name: str  # Dùng tên thay vì ID
 
 class EmployeeOut(EmployeeBase):
     id: int
     is_active: bool
+    department_id: Optional[int] = None
     class Config: 
         from_attributes = True
 
