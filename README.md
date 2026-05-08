@@ -41,7 +41,7 @@ Tạo hồ sơ nhân viên hợp lệ và vector khuôn mặt chính xác để 
 - Lỗi chất lượng ảnh/ AI: Ảnh không đạt chuẩn (như quá tối, quá nhòe, không tìm thấy mặt, tìm thấy nhiều khuôn mặt) -> Báo lỗi, vector không được lưu.
 - Lỗi kết nối các service: Lỗi kết nối PostgreSQL, MinIO, hoặc Qdrant → Dữ liệu không được lưu.
 
-## Xác minh khuôn mặt và điểm danh ('attendance.py')
+## 2. Xác minh khuôn mặt và điểm danh ('attendance.py')
 
 ### **Mô tả** Hệ thống AI tự động nhận diện và xác minh khuôn mặt từ ảnh được chụp tại cửa, sau đó ghi log điểm danh cho nhân viên.
 
