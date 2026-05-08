@@ -1,6 +1,7 @@
-# FaceAccess AI - Hệ thống Kiểm soát Truy cập & Chấm công Khuôn mặt
+# FaceAccess AI - Hệ thống Kiểm soát truy cập & chấm công sử dụng khuôn mặt
 
-Hệ thống **FaceAccess AI** là giải pháp kiểm soát cửa ra vào và chấm công thông minh sử dụng công nghệ nhận diện khuôn mặt.Hệ thống tích hợp xử lý vector mật độ cao (Vector Database) để đảm bảo độ chính xác và khả năng phân quyền truy cập đa tầng (Phòng ban & Cá nhân) theo thời gian thực.
+Hệ thống **FaceAccess AI** là giải pháp kiểm soát cửa ra vào và chấm công thông minh sử dụng công nghệ nhận diện khuôn mặt.
+Hệ thống tích hợp xử lý Vector Database để đảm bảo độ chính xác và khả năng phân quyền truy cập đa tầng theo thời gian thực.
 
 ## 🌟 Tính năng nổi bật
 
