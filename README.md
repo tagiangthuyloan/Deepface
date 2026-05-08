@@ -1,7 +1,7 @@
 ## 1. Đăng ký khuôn mặt cho nhân viên (`employees.py`, `worker.py`)
 
 ### **Mô tả**
-Quản trị viên tạo hồ sơ nhân viên mới và đăng ký khuôn mặt cho nhân viên đó.  
+Quản trị viên tạo hồ sơ nhân viên mới và đăng ký khuôn mặt cho nhân viên đó để phục vụ xác minh khi ra vào công ty.  
 Hệ thống AI sẽ kiểm tra chất lượng ảnh, trích xuất đặc trưng khuôn mặt (ArcFace Embedding) và tính toán average embedding để lưu vào vector database.
 
 ### **Actor**
@@ -9,9 +9,9 @@ Hệ thống AI sẽ kiểm tra chất lượng ảnh, trích xuất đặc trư
 - **Phụ:** Celery Worker (xử lý AI nền)
 
 ### **Mục tiêu**
-Tạo hồ sơ nhân viên hợp lệ và vector khuôn mặt sinh trắc học chính xác để phục vụ xác minh sau này.
+Tạo hồ sơ nhân viên hợp lệ và vector khuôn mặt chính xác để sử dụng ở những lần xác minh sau.
 
-### **Điều kiện tiên quyết**
+### **Pre-condition**
 - Quản trị viên đã đăng nhập vào hệ thống.
 - `department_id` hợp lệ đã tồn tại trong cơ sở dữ liệu.
 - Có từ **1 đến 3 ảnh khuôn mặt** của nhân viên.
@@ -34,16 +34,18 @@ Tạo hồ sơ nhân viên hợp lệ và vector khuôn mặt sinh trắc học 
 10. Lưu vector vào Qdrant Vector Database.
 
 ### **Luồng thay thế**
+- Mã nhân viên không tồn tại
+- Chất lượng ảnh không đạt
 - Upload ít hơn 1 hoặc nhiều hơn 3 ảnh:
   - Hệ thống báo lỗi.
   - Không tạo nhân viên.
 
-### **Điều kiện sau khi thực hiện**
+### **Post-condition**
 - Hồ sơ nhân viên được lưu trong SQL DB.
 - Ảnh gốc được lưu trong MinIO.
 - Vector khuôn mặt được lưu trong Qdrant.
 
-### **Các lỗi có thể xảy ra**
+### **Exceptions**
 - Ảnh quá tối hoặc quá mờ.
 - Không tìm thấy khuôn mặt.
 - Có nhiều hơn 1 khuôn mặt trong ảnh.
