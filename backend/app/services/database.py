@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import create_engine, func, cast, Date
 from app.models.models import Base, Employee, AttendanceLog, AccessPermission, Door, DepartmentPermission, Department
 import os
-from sqlalchemy import create_engine, and_
 from datetime import datetime, time
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:123@db:5432/attendance")
@@ -14,14 +14,23 @@ class DBService:
 
     # --- NHÓM QUẢN LÝ NHÂN VIÊN ---
 
-    def create_employee(self, full_name: str, employee_code: str, department_id: int):
+    def create_employee(self, full_name: str, employee_code: str, department_name: str):
         db = SessionLocal()
         try:
-            # Chỉ tạo nhân viên, không cần copy quyền (quyền sẽ được kế thừa từ phòng ban khi check)
+            # Tự động Tìm hoặc Tạo phòng ban theo Tên
+            dept_name_clean = department_name.strip().title()
+            dept = db.query(Department).filter(Department.name == dept_name_clean).first()
+            
+            if not dept:
+                dept = Department(name=dept_name_clean)
+                db.add(dept)
+                db.commit()
+                db.refresh(dept)
+
             new_emp = Employee(
                 full_name=full_name, 
                 employee_code=employee_code, 
-                department_id=department_id
+                department_id=dept.id
             )
             db.add(new_emp)
             db.commit()
@@ -71,7 +80,6 @@ class DBService:
         try:
             emp = db.query(Employee).filter(Employee.id == employee_id).first()
             if emp:
-                # Xóa log và quyền cá nhân liên quan
                 db.query(AttendanceLog).filter_by(employee_id=employee_id).delete()
                 db.query(AccessPermission).filter_by(employee_id=employee_id).delete()
                 db.delete(emp)
@@ -175,12 +183,10 @@ class DBService:
             
             current_time = datetime.now().time()
 
-            # 1. Kiểm tra quyền cá nhân trước (Đặc cách)
             perm = db.query(AccessPermission).filter_by(
                 employee_id=employee_id, door_id=door.id
             ).first()
             
-            # 2. Nếu không có quyền cá nhân, kiểm tra quyền phòng ban (Kế thừa)
             if not perm:
                 perm = db.query(DepartmentPermission).filter_by(
                     department_id=emp.department_id, door_id=door.id
@@ -189,7 +195,6 @@ class DBService:
             if not perm:
                 return False, "Không có quyền truy cập cửa này"
 
-            # 3. Kiểm tra khung giờ
             if perm.allowed_start_time and perm.allowed_end_time:
                 if not (perm.allowed_start_time <= current_time <= perm.allowed_end_time):
                     return False, f"Ngoài giờ (Cho phép: {perm.allowed_start_time}-{perm.allowed_end_time})"
@@ -198,7 +203,7 @@ class DBService:
         finally:
             db.close()
 
-    # --- NHÓM ĐIỂM DANH & LOG ---
+    # --- NHÓM ĐIỂM DANH & LOG & THỐNG KÊ ---
 
     def log_attendance(self, employee_id: int, door_name: str, status: str, reason: str = None, image_path: str = None):
         db = SessionLocal()
@@ -219,9 +224,33 @@ class DBService:
         finally:
             db.close()
 
-    def get_attendance_history(self, limit: int = 100):
+    def get_attendance_history(self, limit: int = 100, employee_id: int = None):
         db = SessionLocal()
         try:
-            return db.query(AttendanceLog).order_by(AttendanceLog.checkin_at.desc()).limit(limit).all()
+            query = db.query(AttendanceLog)
+            if employee_id is not None:
+                query = query.filter(AttendanceLog.employee_id == employee_id)
+            return query.order_by(AttendanceLog.checkin_at.desc()).limit(limit).all()
+        finally:
+            db.close()
+
+    def get_monthly_report_data(self, month: int, year: int):
+        db = SessionLocal()
+        try:
+            stats = db.query(
+                AttendanceLog.employee_id,
+                Employee.full_name,
+                Employee.employee_code,
+                cast(AttendanceLog.checkin_at, Date).label("date"),
+                func.min(AttendanceLog.checkin_at).label("first_in"),
+                func.max(AttendanceLog.checkin_at).label("last_out")
+            ).join(Employee, Employee.id == AttendanceLog.employee_id)\
+             .filter(func.extract('month', AttendanceLog.checkin_at) == month)\
+             .filter(func.extract('year', AttendanceLog.checkin_at) == year)\
+             .group_by(AttendanceLog.employee_id, Employee.full_name, Employee.employee_code, "date")\
+             .all()
+            
+            # Convert SQLAlchemy objects to dict
+            return [dict(s._mapping) for s in stats]
         finally:
             db.close()

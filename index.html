@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FaceAccess AI - Admin Dashboard V2</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Load Thư viện Face-API siêu nhẹ cho Browser -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; overflow-x: hidden; }
+        .sidebar { height: 100vh; width: 250px; position: fixed; top: 0; left: 0; background-color: #2c3e50; color: white; padding-top: 20px; z-index: 1000; }
+        .sidebar .brand { font-size: 1.5rem; font-weight: 700; text-align: center; margin-bottom: 30px; color: #1abc9c; }
+        .sidebar a { padding: 15px 25px; text-decoration: none; font-size: 1rem; color: #bdc3c7; display: block; border-left: 4px solid transparent; }
+        .sidebar a:hover, .sidebar a.active { background-color: #34495e; color: white; border-left: 4px solid #1abc9c; }
+        .sidebar a i { margin-right: 10px; width: 20px; text-align: center; }
+
+        .main-content { margin-left: 250px; padding: 20px 40px; min-height: 100vh; }
+        .topbar { background: white; padding: 15px 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        
+        .view-section { display: none; animation: fadeIn 0.4s ease; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .stat-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; align-items: center; }
+        .stat-card .icon { font-size: 2.5rem; color: #1abc9c; margin-right: 20px; }
+        .stat-card h3 { margin: 0; font-size: 1.8rem; font-weight: 700; color: #2c3e50; }
+        .stat-card p { margin: 0; color: #7f8c8d; font-size: 0.9rem; text-transform: uppercase; font-weight: 600; }
+        
+        .content-card { background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 25px; margin-bottom: 25px; height: 100%; }
+
+        /* Camera UI */
+        .camera-wrapper { position: relative; width: 100%; max-width: 500px; margin: 0 auto; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.15); background: #000; border: 4px solid #ccc; transition: 0.3s; }
+        .camera-wrapper.detecting { border-color: #f39c12; } /* Cam: Đang thấy mặt */
+        .camera-wrapper.processing { border-color: #3498db; } /* Xanh dương: Đang gửi server */
+        .camera-wrapper.success { border-color: #2ecc71; } /* Xanh lá: Mở cửa */
+        .camera-wrapper.denied { border-color: #e74c3c; } /* Đỏ: Cấm */
+        
+        #video { width: 100%; display: block; transform: scaleX(-1); }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); pointer-events: none; }
+        
+        #auto-status { font-weight: bold; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 1055; }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="brand"><i class="bi bi-robot"></i> FaceAccess AI</div>
+        <a href="#" class="nav-link active" data-target="dashboard"><i class="bi bi-speedometer2"></i> Tổng quan</a>
+        <a href="#" class="nav-link" data-target="setup"><i class="bi bi-gear"></i> Setup Hệ Thống</a>
+        <a href="#" class="nav-link" data-target="employees"><i class="bi bi-people"></i> Nhân viên</a>
+        <a href="#" class="nav-link" data-target="camera"><i class="bi bi-camera-video"></i> Camera Cửa</a>
+        <a href="#" class="nav-link" data-target="logs"><i class="bi bi-journal-text"></i> Lịch sử ra vào</a>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        <div class="topbar">
+            <h4 class="m-0 text-secondary" id="page-title">Tổng quan hệ thống</h4>
+            <div>
+                <span id="model-status" class="badge bg-warning text-dark"><i class="bi bi-hourglass-split"></i> Đang tải Local AI...</span>
+                <span class="badge bg-success ms-2"><i class="bi bi-hdd-network"></i> Backend: Online</span>
+            </div>
+        </div>
+
+        <!-- 1. DASHBOARD -->
+        <div id="dashboard" class="view-section active">
+            <div class="row">
+                <div class="col-md-3"><div class="stat-card"><div class="icon"><i class="bi bi-people-fill"></i></div><div><p>Nhân viên</p><h3 id="stat-emp">0</h3></div></div></div>
+                <div class="col-md-3"><div class="stat-card"><div class="icon"><i class="bi bi-door-open-fill"></i></div><div><p>Cổng / Cửa</p><h3 id="stat-door">0</h3></div></div></div>
+                <div class="col-md-3"><div class="stat-card"><div class="icon"><i class="bi bi-building"></i></div><div><p>Phòng ban</p><h3 id="stat-dept">0</h3></div></div></div>
+                <div class="col-md-3"><div class="stat-card"><div class="icon"><i class="bi bi-check-circle-fill"></i></div><div><p>Log hôm nay</p><h3 id="stat-log">0</h3></div></div></div>
+            </div>
+        </div>
+
+        <!-- 2. SETUP -->
+        <div id="setup" class="view-section">
+            <div class="row">
+                <!-- SETUP PHÒNG BAN -->
+                <div class="col-md-6">
+                    <div class="content-card">
+                        <h5><i class="bi bi-building"></i> Quản lý Phòng Ban</h5>
+                        <hr>
+                        <form id="form-dept" class="d-flex mb-3">
+                            <input type="text" id="dept_name_input" class="form-control me-2" placeholder="Tên phòng ban (VD: Nhân sự)" required>
+                            <button type="submit" class="btn btn-primary text-nowrap">Thêm</button>
+                        </form>
+                        <ul class="list-group" id="dept-list"><li class="list-group-item text-muted">Đang tải...</li></ul>
+                    </div>
+                </div>
+                <!-- SETUP CỬA -->
+                <div class="col-md-6">
+                    <div class="content-card">
+                        <h5><i class="bi bi-door-closed"></i> Quản lý Khu Vực / Cửa</h5>
+                        <hr>
+                        <form id="form-door" class="d-flex mb-3">
+                            <input type="text" id="door_name_input" class="form-control me-2" placeholder="Tên cửa (VD: Cửa Chính)" required>
+                            <button type="submit" class="btn btn-primary text-nowrap">Thêm</button>
+                        </form>
+                        <ul class="list-group" id="door-list"><li class="list-group-item text-muted">Đang tải...</li></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. EMPLOYEES -->
+        <div id="employees" class="view-section">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="content-card">
+                        <h5>Đăng ký nhân viên</h5>
+                        <form id="form-employee">
+                            <div class="mb-3"><label>Họ và Tên</label><input type="text" id="emp_name" class="form-control" required></div>
+                            <div class="mb-3"><label>Mã NV</label><input type="text" id="emp_code" class="form-control" required></div>
+                            <div class="mb-3">
+                                <label>Phòng ban</label>
+                                <select id="emp_dept" class="form-select" required><option value="">-- Chọn phòng ban --</option></select>
+                            </div>
+                            <div class="mb-3"><label>Ảnh khuôn mặt (1-5 ảnh)</label><input type="file" id="emp_files" class="form-control" accept="image/*" multiple required></div>
+                            <button type="submit" class="btn btn-success w-100" id="btn-register"><i class="bi bi-cloud-upload"></i> Đăng ký & Huấn luyện AI</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="content-card">
+                        <div class="d-flex justify-content-between">
+                            <h5>Danh sách nhân viên</h5>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadEmployees()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
+                        </div>
+                        <div class="table-responsive mt-3">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light"><tr><th>ID</th><th>Mã NV</th><th>Họ Tên</th><th>Phòng ban</th><th>Hành động</th></tr></thead>
+                                <tbody id="employee-list-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. CAMERA AUTO CHECK-IN -->
+        <div id="camera" class="view-section text-center">
+            <div class="content-card d-inline-block p-4">
+                <h5 class="mb-3 text-danger fw-bold"><i class="bi bi-record-circle text-danger"></i> HỆ THỐNG TỰ ĐỘNG NHẬN DIỆN</h5>
+                
+                <div class="mb-3 mx-auto" style="max-width: 400px;">
+                    <select id="camera_door_select" class="form-select form-select-lg text-center bg-light fw-bold"></select>
+                </div>
+
+                <div id="auto-status" class="bg-secondary text-white">Trạng thái: Đang chờ khuôn mặt...</div>
+
+                <div class="camera-wrapper" id="cam-wrapper">
+                    <video id="video" autoplay playsinline muted></video>
+                    <!-- Khung canvas để vẽ hộp vuông AI bắt mặt -->
+                    <canvas id="overlay"></canvas>
+                </div>
+
+                <div id="scan-result" class="alert mt-4 mx-auto text-start" style="display: none; max-width: 500px;">
+                    <h4 id="res-name" class="alert-heading">---</h4><hr><p id="res-msg" class="mb-0 fw-bold fs-5">---</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. LOGS -->
+        <div id="logs" class="view-section">
+            <div class="content-card">
+                <div class="d-flex justify-content-between mb-3">
+                    <h5>Lịch sử Ra Vào</h5>
+                    <button class="btn btn-outline-primary" onclick="loadLogs()">Làm mới</button>
+                </div>
+                <table class="table table-striped align-middle">
+                    <thead class="table-dark"><tr><th>Thời gian</th><th>ID NV</th><th>Tên Cửa</th><th>Trạng thái</th><th>Lý do</th></tr></thead>
+                    <tbody id="logs-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast-container"><div id="liveToast" class="toast text-white border-0" role="alert"><div class="d-flex"><div class="toast-body" id="toast-msg"></div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = "http://localhost:8000"; 
+        
+        // --- 0. LOAD LOCAL AI MODEL (Dùng để bắt khung mặt) ---
+        let isLocalAiLoaded = false;
+        async function loadFaceApiModels() {
+            try {
+                // Tải model cực nhẹ từ jsdelivr
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                isLocalAiLoaded = true;
+                document.getElementById('model-status').className = "badge bg-success text-white";
+                document.getElementById('model-status').innerHTML = "<i class="+'"bi bi-cpu"'+"></i> Local AI: Sẵn sàng";
+            } catch (e) {
+                console.error("Lỗi tải FaceAPI", e);
+                document.getElementById('model-status').className = "badge bg-danger";
+                document.getElementById('model-status').innerText = "Lỗi tải Local AI";
+            }
+        }
+        loadFaceApiModels(); // Gọi ngay khi mở web
+
+        function showToast(msg, type = "success") {
+            const toastEl = document.getElementById('liveToast');
+            toastEl.className = `toast align-items-center text-white border-0 bg-${type}`;
+            document.getElementById('toast-msg').innerHTML = msg;
+            new bootstrap.Toast(toastEl).show();
+        }
+
+        // --- NAVIGATION ---
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById('page-title').innerText = this.innerText;
+
+                const target = this.getAttribute('data-target');
+                document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
+                document.getElementById(target).classList.add('active');
+
+                if(target === 'dashboard') loadStats();
+                if(target === 'setup') { loadDoors(); loadDepts(); }
+                if(target === 'employees') { loadEmployees(); loadDeptsForSelect(); }
+                if(target === 'logs') loadLogs();
+                if(target === 'camera') { loadDoorsForCamera(); startCamera(); } 
+                else { stopCamera(); }
+            });
+        });
+
+        // --- FETCH DATA LOGIC ---
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API_URL}/admin/system-stats`);
+                if(res.ok) {
+                    const data = await res.json();
+                    document.getElementById('stat-emp').innerText = data.employees;
+                    document.getElementById('stat-door').innerText = data.doors;
+                    document.getElementById('stat-dept').innerText = data.departments;
+                    document.getElementById('stat-log').innerText = data.today_logs;
+                }
+            } catch(e){}
+        }
+
+        async function loadDepts() {
+            try {
+                const res = await fetch(`${API_URL}/departments/`);
+                const data = await res.json();
+                const list = document.getElementById('dept-list'); list.innerHTML = '';
+                data.forEach(d => list.innerHTML += `<li class="list-group-item"><i class="bi bi-building"></i> ${d.name} <span class="badge bg-secondary float-end">ID: ${d.id}</span></li>`);
+            } catch(e){}
+        }
+
+        async function loadDoors() {
+            try {
+                const res = await fetch(`${API_URL}/doors/`);
+                const data = await res.json();
+                const list = document.getElementById('door-list'); list.innerHTML = '';
+                data.forEach(d => list.innerHTML += `<li class="list-group-item"><i class="bi bi-door-closed"></i> ${d.name} <span class="badge bg-secondary float-end">ID: ${d.id}</span></li>`);
+            } catch(e){}
+        }
+
+        async function loadDeptsForSelect() {
+            const select = document.getElementById('emp_dept');
+            const res = await fetch(`${API_URL}/departments/`);
+            const data = await res.json();
+            select.innerHTML = '<option value="">-- Chọn phòng ban --</option>';
+            data.forEach(d => select.innerHTML += `<option value="${d.name}">${d.name}</option>`); // Backend yêu cầu tên phòng ban
+        }
+
+        // --- SETUP FORMS ---
+        document.getElementById('form-dept').addEventListener('submit', async(e)=>{
+            e.preventDefault();
+            const res = await fetch(`${API_URL}/departments/`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name: document.getElementById('dept_name_input').value}) });
+            if(res.ok) { showToast("Thêm Phòng ban thành công"); loadDepts(); document.getElementById('dept_name_input').value=''; }
+        });
+
+        document.getElementById('form-door').addEventListener('submit', async(e)=>{
+            e.preventDefault();
+            const res = await fetch(`${API_URL}/doors/`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name: document.getElementById('door_name_input').value}) });
+            if(res.ok) { showToast("Thêm Cửa thành công"); loadDoors(); document.getElementById('door_name_input').value=''; }
+        });
+
+        // --- EMPLOYEE FORMS ---
+        document.getElementById('form-employee').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-register'); btn.disabled = true; btn.innerText="Đang đẩy lên AI...";
+            const fd = new FormData();
+            fd.append("full_name", document.getElementById('emp_name').value);
+            fd.append("employee_code", document.getElementById('emp_code').value);
+            fd.append("department_name", document.getElementById('emp_dept').value); // Gửi tên PB
+            const files = document.getElementById('emp_files').files;
+            for(let f of files) fd.append("files", f);
+
+            const res = await fetch(`${API_URL}/employees/register`, { method: "POST", body: fd });
+            if(res.ok) { showToast("Đăng ký thành công! AI đang xử lý vector ngầm."); document.getElementById('form-employee').reset(); loadEmployees(); }
+            else showToast("Lỗi đăng ký!", "danger");
+            btn.disabled = false; btn.innerText="Đăng ký & Huấn luyện AI";
+        });
+
+        async function loadEmployees() {
+            try {
+                const res = await fetch(`${API_URL}/employees/`);
+                const data = await res.json();
+                const tbody = document.getElementById('employee-list-body'); tbody.innerHTML = '';
+                data.forEach(emp => {
+                    tbody.innerHTML += `<tr><td>${emp.id}</td><td>${emp.employee_code}</td><td class="fw-bold">${emp.full_name}</td><td>Phòng ban ID: ${emp.department_id || '?'}</td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteEmp(${emp.id})"><i class="bi bi-trash"></i></button></td></tr>`;
+                });
+            } catch(e){}
+        }
+
+        async function deleteEmp(id) {
+            if(!confirm("Xóa nhân viên này?")) return;
+            await fetch(`${API_URL}/employees/${id}`, { method: 'DELETE' });
+            showToast("Đã xóa", "warning"); loadEmployees();
+        }
+
+        // --- AUTO CAMERA CHECK-IN LOGIC ---
+        let stream = null;
+        let detectionInterval = null;
+        let isProcessingAPI = false; // Chặn spam API khi đang nhận diện
+
+        async function loadDoorsForCamera() {
+            const select = document.getElementById('camera_door_select');
+            const res = await fetch(`${API_URL}/doors/`);
+            const doors = await res.json();
+            select.innerHTML = doors.length ? '' : '<option value="">-- Cần tạo Cửa trước! --</option>';
+            doors.forEach(d => select.innerHTML += `<option value="${d.name}">Đang quét tại: ${d.name}</option>`);
+        }
+
+        async function startCamera() {
+            const video = document.getElementById('video');
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                
+                // Khi video chạy, bắt đầu vòng lặp quét mặt
+                video.onplay = () => {
+                    const canvas = document.getElementById('overlay');
+                    faceapi.matchDimensions(canvas, {width: video.videoWidth, height: video.videoHeight});
+                    
+                    detectionInterval = setInterval(async () => {
+                        if(!isLocalAiLoaded || isProcessingAPI) return; // Nếu chưa load hoặc đang bận API thì bỏ qua
+
+                        // Dùng TinyFaceDetector siêu nhẹ để quét xem có mặt không
+                        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.6 }));
+                        
+                        // Vẽ khung vuông lên mặt
+                        const resizedDetections = faceapi.resizeResults(detections, {width: video.videoWidth, height: video.videoHeight});
+                        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                        faceapi.draw.drawDetections(canvas, resizedDetections);
+
+                        const wrapper = document.getElementById('cam-wrapper');
+                        const statusTxt = document.getElementById('auto-status');
+
+                        if (detections.length > 0) {
+                            wrapper.className = "camera-wrapper detecting";
+                            statusTxt.innerText = "Trạng thái: Phát hiện khuôn mặt! Đang gửi kiểm tra...";
+                            statusTxt.className = "bg-warning text-dark p-2 rounded mb-2 fw-bold";
+                            
+                            // Tự động chụp và gửi API
+                            autoCaptureAndSend();
+                        } else {
+                            wrapper.className = "camera-wrapper";
+                            statusTxt.innerText = "Trạng thái: Đang chờ khuôn mặt...";
+                            statusTxt.className = "bg-secondary text-white p-2 rounded mb-2";
+                        }
+                    }, 500); // Quét 0.5s một lần để nhẹ máy
+                };
+            } catch (err) { alert("Lỗi Camera"); }
+        }
+
+        function stopCamera() {
+            if(stream) stream.getTracks().forEach(t => t.stop());
+            if(detectionInterval) clearInterval(detectionInterval);
+        }
+
+        async function autoCaptureAndSend() {
+            isProcessingAPI = true; // Khóa không cho quét tiếp
+            
+            const video = document.getElementById('video');
+            const doorName = document.getElementById('camera_door_select').value;
+            const resBox = document.getElementById('scan-result');
+            const wrapper = document.getElementById('cam-wrapper');
+            
+            wrapper.className = "camera-wrapper processing";
+            resBox.style.display = 'none';
+
+            // Tạo ảnh từ video
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+
+            canvas.toBlob(async (blob) => {
+                const fd = new FormData();
+                fd.append("file", blob, "capture.jpg");
+
+                try {
+                    const res = await fetch(`${API_URL}/attendance/identify?door_name=${encodeURIComponent(doorName)}`, {
+                        method: "POST", body: fd
+                    });
+                    const data = await res.json();
+                    
+                    resBox.style.display = 'block';
+                    document.getElementById('res-name').innerText = data.match ? `Nhân viên: ${data.employee_name}` : "❌ NGƯỜI LẠ";
+                    document.getElementById('res-msg').innerText = data.message;
+                    
+                    if(data.open_door) {
+                        resBox.className = "alert mt-4 mx-auto text-start alert-success";
+                        wrapper.className = "camera-wrapper success";
+                    } else {
+                        resBox.className = "alert mt-4 mx-auto text-start alert-danger";
+                        wrapper.className = "camera-wrapper denied";
+                    }
+
+                } catch (err) {
+                    showToast("Lỗi API", "danger");
+                } finally {
+                    // Cực kỳ quan trọng: Cho hệ thống nghỉ 3 giây trước khi quét mặt tiếp theo
+                    setTimeout(() => {
+                        isProcessingAPI = false;
+                        document.getElementById('overlay').getContext('2d').clearRect(0,0, canvas.width, canvas.height);
+                    }, 3000); 
+                }
+            }, 'image/jpeg');
+        }
+
+        // --- LOGS ---
+        async function loadLogs() {
+            try {
+                const res = await fetch(`${API_URL}/attendance/history?limit=30`);
+                const data = await res.json();
+                const tbody = document.getElementById('logs-body'); tbody.innerHTML = '';
+                data.forEach(l => {
+                    const d = new Date(l.checkin_at).toLocaleString('vi-VN');
+                    let b = l.status === 'SUCCESS' ? '<span class="badge bg-success">Thành công</span>' : '<span class="badge bg-danger">Từ chối</span>';
+                    tbody.innerHTML += `<tr><td>${d}</td><td class="fw-bold">${l.employee_id||'Lạ'}</td><td>Cửa ID: ${l.door_id}</td><td>${b}</td><td>${l.reason||''}</td></tr>`;
+                });
+            } catch(e){}
+        }
+
+        // Chạy khi khởi động
+        loadStats();
+    </script>
+</body>
+</html>
