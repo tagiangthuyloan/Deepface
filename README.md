@@ -70,4 +70,4 @@ Tạo hồ sơ nhân viên hợp lệ và vector khuôn mặt chính xác để 
 - Lỗi kết nối cơ sở dữ liệu: Lỗi kết nối PostgreSQL.
 - Lỗi AI: Lỗi trích xuất embedding từ ảnh chụp.
 
-
+...
